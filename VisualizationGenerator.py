@@ -1,34 +1,44 @@
 import sys
-import dominate
-from dominate.tags import *
 import plotly.express as px
 from plotly.subplots import make_subplots
 import pandas as pd
-import webbrowser
 
 patternName = (sys.argv[1])
+patternName = patternName.replace("<=", "≤")
+patternName = patternName.replace(">=", "≥")
 originalPattern = patternName
+patternName = patternName.replace(")", "").replace("(", "")
+originalPatternWithoutParenthesis = patternName
 patternName = patternName.split("AND")
 database = (sys.argv[2])
 targetAttribute = (sys.argv[3])
+targetAttribute = targetAttribute.replace("<=", "≤")
+targetAttribute = targetAttribute.replace(">=", "≥")
+targetAttribute = targetAttribute.replace(")", "")
+targetAttribute = targetAttribute.replace("(", "")
 targetAttributeArray = targetAttribute.split("AND")
 patternSize = len(patternName)
 df = pd.read_csv(database)
 
+print(patternName)
+print(targetAttribute)
+print(originalPattern)
+print(originalPatternWithoutParenthesis)
+print(patternSize)
+print(database)
+
 def opposite(pattern):
-    if "=" in pattern:
-        if "<" in pattern:
-            pattern = pattern.replace("<=", ">")
-        elif ">" in pattern:
-            pattern = pattern.replace(">=", "<")
-    else:
-        if ">" in pattern:
-            pattern = pattern.replace(">", "<=")
-        elif "<" in pattern:
-            pattern = pattern.replace("<", ">=")
+    if "≤" in pattern:
+        pattern = pattern.replace("≤", ">")
+    elif "≥" in pattern:
+        pattern = pattern.replace("≥", "<")
+    elif ">" in pattern:
+        pattern = pattern.replace(">", "≤")
+    elif "<" in pattern:
+        pattern = pattern.replace("<", "≥")
     return pattern
 
-def generatePatternPage(pattern, patternSize, df, targetAttributeArray, wholePattern):
+def generatePatternPage(pattern, patternSize, df, targetAttributeArray, wholePatternWithParenthesis, wholePattern):
 
     attr = []
     value = []
@@ -48,14 +58,12 @@ def generatePatternPage(pattern, patternSize, df, targetAttributeArray, wholePat
             attr.append(separation[0].strip())
             value.append(separation[1].strip().replace("'",""))
             separator.append("=")
-            for sep in [">=", "<="]:
+        elif len(item.split("≥")) == 2 or len(item.split("≤")) == 2:
+            for sep in ["≥", "≤"]:
                 if len(item.split(sep)) == 2:
-                    separator.append(sep)
-                    differents[-1] = None
-                    attr.remove(separation[0].strip())
-                    value.remove(separation[1].strip())
-                    separator.remove("=")
                     separation = item.split(sep)
+                    separator.append(sep)
+                    differents.append(None)
                     attr.append(separation[0].strip())
                     value.append(separation[1].strip().replace("'",""))
                     separator.append(sep)
@@ -86,13 +94,14 @@ def generatePatternPage(pattern, patternSize, df, targetAttributeArray, wholePat
             ClassAttr.append(separation[0].strip())
             ClassValue.append(separation[1].strip().replace("'",""))
             ClassSeparator.append("=")
-            for sep in [">=", "<="]:
+        elif len(targetAttribute.split("≤")) == 2 or len(targetAttribute.split("≥")) == 2:
+            for sep in ["≥", "≤"]:
                 if len(targetAttribute.split(sep)) == 2:
-                    ClassDiff[-1] = None
+                    ClassDiff.append(None)
                     separation = targetAttribute.split(sep)
-                    ClassAttr[-1] = separation[0].strip()
-                    ClassValue[-1] = separation[1].strip().replace("'","")
-                    ClassSeparator[-1] = sep
+                    ClassAttr.append(separation[0].strip())
+                    ClassValue.append(separation[1].strip().replace("'",""))
+                    ClassSeparator.append(sep)
         else:
             for sep in [">", "<"]:
                 if len(targetAttribute.split(sep)) == 2:
@@ -104,11 +113,11 @@ def generatePatternPage(pattern, patternSize, df, targetAttributeArray, wholePat
 
     if patternSize == 1:
         if differents[0] != None:
-            df[" "] =  [ "Missing" if comparedData != comparedData else str(value[0]) if comparedData == value[0] else "Not "+str(value[0]) for comparedData in df[attr[0]]]
+            df[" "] =  [ "Missing" if comparedData != comparedData else str(attr[0]+" = "+value[0]) if comparedData == value[0] else str(attr[0]+" != "+value[0]) for comparedData in df[attr[0]]]
             df[attr[0]] = df[attr[0]].copy()
-            df[attr[0]+str(0)] = [ "Missing" if comparedData != comparedData else str(value[0]) if comparedData == value[0] else "Not "+str(value[0]) for comparedData in df[attr[0]]]
+            df[attr[0]+str(0)] = [ "Missing" if comparedData != comparedData else str(attr[0]+" = "+value[0]) if comparedData == value[0] else str(attr[0]+" != "+value[0]) for comparedData in df[attr[0]]]
         else:
-            if separator[0] == "<=":
+            if separator[0] == "≤":
                 df[" "] =  df[attr[0]].map(lambda x : "Missing" if x != x else pattern[0] if x <= float(value[0].replace(",",".")) else opposite(pattern[0]) )
                 df[attr[0]] = df[attr[0]].copy()
                 df[attr[0]+str(0)] =  df[attr[0]].map(lambda x : "Missing" if x != x else pattern[0] if x <= float(value[0].replace(",",".")) else opposite(pattern[0]) )
@@ -116,7 +125,7 @@ def generatePatternPage(pattern, patternSize, df, targetAttributeArray, wholePat
                 df[" "] =  df[attr[0]].map(lambda x : "Missing" if x != x else pattern[0] if x < float(value[0].replace(",",".")) else opposite(pattern[0]) )
                 df[attr[0]] = df[attr[0]].copy()
                 df[attr[0]+str(0)] =  df[attr[0]].map(lambda x : "Missing" if x != x else pattern[0] if x < float(value[0].replace(",",".")) else opposite(pattern[0]) )
-            elif separator[0] == ">=":
+            elif separator[0] == "≥":
                 df[" "] =  df[attr[0]].map(lambda x : "Missing" if x != x else pattern[0] if x >= float(value[0].replace(",",".")) else opposite(pattern[0]) )
                 df[attr[0]] = df[attr[0]].copy()
                 df[attr[0]+str(0)] =  df[attr[0]].map(lambda x : "Missing" if x != x else pattern[0] if x >= float(value[0].replace(",",".")) else opposite(pattern[0]) )
@@ -126,11 +135,11 @@ def generatePatternPage(pattern, patternSize, df, targetAttributeArray, wholePat
                 df[attr[0]+str(0)] =  df[attr[0]].map(lambda x : "Missing" if x != x else pattern[0] if x > float(value[0].replace(",",".")) else opposite(pattern[0]) )
     else:
         if differents[0] != None:
-            df[" "] =  [ str(value[0]) if comparedData == value[0] else "Not "+str(value[0]) for comparedData in df[attr[0]]]
+            df[" "] =  [ str(attr[0]+" = "+value[0]) if comparedData == value[0] else str(attr[0]+" != "+value[0]) for comparedData in df[attr[0]]]
             df[attr[0]] = df[attr[0]].copy()
-            df[attr[0]+str(0)] = [str(value[0]) if comparedData == value[0] else "Not "+str(value[0]) for comparedData in df[attr[0]]]
+            df[attr[0]+str(0)] = [str(attr[0]+" = "+value[0]) if comparedData == value[0] else str(attr[0]+" != "+value[0]) for comparedData in df[attr[0]]]
         else:
-            if separator[0] == "<=":
+            if separator[0] == "≤":
                 df[" "] =  df[attr[0]].map(lambda x : pattern[0] if x <= float(value[0].replace(",",".")) else opposite(pattern[0]) )
                 df[attr[0]] = df[attr[0]].copy()
                 df[attr[0]+str(0)] =  df[attr[0]].map(lambda x : pattern[0] if x <= float(value[0].replace(",",".")) else opposite(pattern[0]) )
@@ -138,7 +147,7 @@ def generatePatternPage(pattern, patternSize, df, targetAttributeArray, wholePat
                 df[" "] =  df[attr[0]].map(lambda x : pattern[0] if x < float(value[0].replace(",",".")) else opposite(pattern[0]) )
                 df[attr[0]] = df[attr[0]].copy()
                 df[attr[0]+str(0)] =  df[attr[0]].map(lambda x : pattern[0] if x < float(value[0].replace(",",".")) else opposite(pattern[0]) )
-            elif separator[0] == ">=":
+            elif separator[0] == "≥":
                 df[" "] =  df[attr[0]].map(lambda x : pattern[0] if x >= float(value[0].replace(",",".")) else opposite(pattern[0]) )
                 df[attr[0]] = df[attr[0]].copy()
                 df[attr[0]+str(0)] =  df[attr[0]].map(lambda x : pattern[0] if x >= float(value[0].replace(",",".")) else opposite(pattern[0]) )
@@ -149,11 +158,11 @@ def generatePatternPage(pattern, patternSize, df, targetAttributeArray, wholePat
 
     if patternSize > 1:
         if differents[1] != None:
-            df["  "] = ["Missing" if comparedData != comparedData else comparedData for comparedData in df[attr[1]]]
+            df["  "] = ["Missing" if comparedData != comparedData else comparedData  for comparedData in df[attr[1]]]
             df[attr[1]] = df[attr[1]].copy()
             df[attr[1]+str(1)] = ["Missing" if comparedData != comparedData else comparedData for comparedData in df[attr[1]]]
         else:
-            if separator[1] == "<=":
+            if separator[1] == "≤":
                 df["  "] =  df[attr[1]].map(lambda x : "Missing" if x != x else pattern[1] if x <= float(value[1].replace(",",".")) else opposite(pattern[1]) )
                 df[attr[1]] = df[attr[1]].copy()
                 df[attr[1]+str(1)] =  df[attr[1]].map(lambda x : "Missing" if x != x else pattern[1] if x <= float(value[1].replace(",",".")) else opposite(pattern[1]) )
@@ -161,7 +170,7 @@ def generatePatternPage(pattern, patternSize, df, targetAttributeArray, wholePat
                 df["  "] =  df[attr[1]].map(lambda x : "Missing" if x != x else pattern[1] if x < float(value[1].replace(",",".")) else opposite(pattern[1]) )
                 df[attr[1]] = df[attr[1]].copy()
                 df[attr[1]+str(1)] =  df[attr[1]].map(lambda x : "Missing" if x != x else pattern[1] if x < float(value[1].replace(",",".")) else opposite(pattern[1]) )
-            elif separator[1] == ">=":
+            elif separator[1] == "≥":
                 df["  "] =  df[attr[1]].map(lambda x : "Missing" if x != x else pattern[1] if x >= float(value[1].replace(",",".")) else opposite(pattern[1]) )
                 df[attr[1]] = df[attr[1]].copy()
                 df[attr[1]+str(1)] =  df[attr[1]].map(lambda x : "Missing" if x != x else pattern[1] if x >= float(value[1].replace(",",".")) else opposite(pattern[1]) )
@@ -172,11 +181,11 @@ def generatePatternPage(pattern, patternSize, df, targetAttributeArray, wholePat
 
     if patternSize > 2:
         if differents[2] != None:
-            df["   "] =  [ str(value[2]) if comparedData == value[2] else "Not "+str(value[2]) for comparedData in df[attr[2]]]
+            df["   "] =  [ str(attr[2]+" = "+value[2]) if comparedData == value[2] else str(attr[2]+" != "+value[2]) for comparedData in df[attr[2]]]
             df[attr[2]] = df[attr[2]].copy()
-            df[attr[2]+str(2)] = [ str(value[2]) if comparedData == value[2] else "Not "+str(value[2]) for comparedData in df[attr[2]]]
+            df[attr[2]+str(2)] = [ str(attr[2]+" = "+value[2]) if comparedData == value[2] else str(attr[2]+" != "+value[2]) for comparedData in df[attr[2]]]
         else:
-            if separator[2] == "<=":
+            if separator[2] == "≤":
                 df["   "] =  df[attr[2]].map(lambda x : pattern[2] if x <= float(value[2].replace(",",".")) else opposite(pattern[2]) )
                 df[attr[2]] = df[attr[2]].copy()
                 df[attr[2]+str(2)] =  df[attr[2]].map(lambda x : pattern[2] if x <= float(value[2].replace(",",".")) else opposite(pattern[2]) )
@@ -184,7 +193,7 @@ def generatePatternPage(pattern, patternSize, df, targetAttributeArray, wholePat
                 df["   "] =  df[attr[2]].map(lambda x : pattern[2] if x < float(value[2].replace(",",".")) else opposite(pattern[2]) )
                 df[attr[2]] = df[attr[2]].copy()
                 df[attr[2]+str(2)] =  df[attr[2]].map(lambda x : pattern[2] if x < float(value[2].replace(",",".")) else opposite(pattern[2]) )
-            elif separator[2] == ">=":
+            elif separator[2] == "≥":
                 df["   "] =  df[attr[2]].map(lambda x : pattern[2] if x >= float(value[2].replace(",",".")) else opposite(pattern[2]) )
                 df[attr[2]] = df[attr[2]].copy()
                 df[attr[2]+str(2)] =  df[attr[2]].map(lambda x : pattern[2] if x >= float(value[2].replace(",",".")) else opposite(pattern[2]) )
@@ -201,11 +210,11 @@ def generatePatternPage(pattern, patternSize, df, targetAttributeArray, wholePat
         if ClassDiff[0] != None:
             df[column] = ["Missing" if comparedData != comparedData else comparedData for comparedData in df[column]]        
         else:
-            if ClassSeparator[0] == "<=":
+            if ClassSeparator[0] == "≤":
                 df[column] =  df[column].map(lambda x : targetAttributeArray[0] if x <= float(ClassValue[0].replace(",",".")) else opposite(targetAttributeArray[0]))
             elif ClassSeparator[0] == "<":
                 df[column] =  df[column].map(lambda x : targetAttributeArray[0] if x < float(ClassValue[0].replace(",",".")) else opposite(targetAttributeArray[0]))
-            elif ClassSeparator[0] == ">=":
+            elif ClassSeparator[0] == "≥":
                 df[column] =  df[column].map(lambda x : targetAttributeArray[0] if x >= float(ClassValue[0].replace(",",".")) else opposite(targetAttributeArray[0]))
             else:
                 df[column] =  df[column].map(lambda x : targetAttributeArray[0] if x > float(ClassValue[0].replace(",",".")) else opposite(targetAttributeArray[0]))
@@ -230,7 +239,7 @@ def generatePatternPage(pattern, patternSize, df, targetAttributeArray, wholePat
                     else:
                         df[className] = [ className if comparedData0 != ClassValue[0] and comparedData1 != ClassValue[1] else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
             else:
-                if ClassSeparator[1] == "<=":
+                if ClassSeparator[1] == "≤":
                     if ClassDiff[0]:
                         df[className] =  [ className if comparedData0 == ClassValue[0] and comparedData1 <= float(ClassValue[1].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
                     else:
@@ -240,7 +249,7 @@ def generatePatternPage(pattern, patternSize, df, targetAttributeArray, wholePat
                         df[className] =  [ className if comparedData0 == ClassValue[0] and comparedData1 < float(ClassValue[1].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
                     else:
                         df[className] =  [ className if comparedData0 != ClassValue[0] and comparedData1 < float(ClassValue[1].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
-                elif ClassSeparator[1] == ">=":
+                elif ClassSeparator[1] == "≥":
                     if ClassDiff[0]:
                         df[className] =  [ className if comparedData0 == ClassValue[0] and comparedData1 >= float(ClassValue[1].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
                     else:
@@ -251,18 +260,18 @@ def generatePatternPage(pattern, patternSize, df, targetAttributeArray, wholePat
                     else:
                         df[className] =  [ className if comparedData0 != ClassValue[0] and comparedData1 > float(ClassValue[1].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]  
         else:
-            if ClassSeparator[0] == "<=":
+            if ClassSeparator[0] == "≤":
                 if ClassDiff[1] != None:
                     if ClassDiff[1]:
                         df[className] =  [ className if comparedData1 == ClassValue[1] and comparedData0 <= float(ClassValue[0].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
                     else:
                         df[className] =  [ className if comparedData1 != ClassValue[1] and comparedData0 <= float(ClassValue[0].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
                 else:
-                    if ClassSeparator[1] == "<=":
+                    if ClassSeparator[1] == "≤":
                         df[className] =  [ className if comparedData0 <= float(ClassValue[0].replace(",", ".")) and comparedData1 <= float(ClassValue[1].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
                     elif ClassSeparator[1] == "<":
                         df[className] =  [ className if comparedData0 <= float(ClassValue[0].replace(",", ".")) and comparedData1 < float(ClassValue[1].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
-                    elif ClassSeparator[1] == ">=":
+                    elif ClassSeparator[1] == "≥":
                         df[className] =  [ className if comparedData0 <= float(ClassValue[0].replace(",", ".")) and comparedData1 >= float(ClassValue[1].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
                     else:
                         df[className] =  [ className if comparedData0 <= float(ClassValue[0].replace(",", ".")) and comparedData1 > float(ClassValue[1].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
@@ -273,26 +282,26 @@ def generatePatternPage(pattern, patternSize, df, targetAttributeArray, wholePat
                     else:
                         df[className] =  [ className if comparedData1 != ClassValue[1] and comparedData0 < float(ClassValue[0].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
                 else:
-                    if ClassSeparator[1] == "<=":
+                    if ClassSeparator[1] == "≤":
                         df[className] =  [ className if comparedData0 < float(ClassValue[0].replace(",", ".")) and comparedData1 <= float(ClassValue[1].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
                     elif ClassSeparator[1] == "<":
                         df[className] =  [ className if comparedData0 < float(ClassValue[0].replace(",", ".")) and comparedData1 < float(ClassValue[1].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
-                    elif ClassSeparator[1] == ">=":
+                    elif ClassSeparator[1] == "≥":
                         df[className] =  [ className if comparedData0 < float(ClassValue[0].replace(",", ".")) and comparedData1 >= float(ClassValue[1].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
                     else:
                         df[className] =  [ className if comparedData0 < float(ClassValue[0].replace(",", ".")) and comparedData1 > float(ClassValue[1].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
-            elif ClassSeparator[0] == ">=":
+            elif ClassSeparator[0] == "≥":
                 if ClassDiff[1] != None:
                     if ClassDiff[1]:
                         df[className] =  [ className if comparedData1 == ClassValue[1] and comparedData0 >= float(ClassValue[0].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
                     else:
                         df[className] =  [ className if comparedData1 != ClassValue[1] and comparedData0 >= float(ClassValue[0].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
                 else:
-                    if ClassSeparator[1] == "<=":
+                    if ClassSeparator[1] == "≤":
                         df[className] =  [ className if comparedData0 >= float(ClassValue[0].replace(",", ".")) and comparedData1 <= float(ClassValue[1].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
                     elif ClassSeparator[1] == "<":
                         df[className] =  [ className if comparedData0 >= float(ClassValue[0].replace(",", ".")) and comparedData1 < float(ClassValue[1].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
-                    elif ClassSeparator[1] == ">=":
+                    elif ClassSeparator[1] == "≥":
                         df[className] =  [ className if comparedData0 >= float(ClassValue[0].replace(",", ".")) and comparedData1 >= float(ClassValue[1].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
                     else:
                         df[className] =  [ className if comparedData0 >= float(ClassValue[0].replace(",", ".")) and comparedData1 > float(ClassValue[1].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
@@ -303,11 +312,11 @@ def generatePatternPage(pattern, patternSize, df, targetAttributeArray, wholePat
                     else:
                         df[className] =  [ className if comparedData1 != ClassValue[1] and comparedData0 > float(ClassValue[0].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
                 else:
-                    if ClassSeparator[1] == "<=":
+                    if ClassSeparator[1] == "≤":
                         df[className] =  [ className if comparedData0 > float(ClassValue[0].replace(",", ".")) and comparedData1 <= float(ClassValue[1].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
                     elif ClassSeparator[1] == "<":
                         df[className] =  [ className if comparedData0 > float(ClassValue[0].replace(",", ".")) and comparedData1 < float(ClassValue[1].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
-                    elif ClassSeparator[1] == ">=":
+                    elif ClassSeparator[1] == "≥":
                         df[className] =  [ className if comparedData0 > float(ClassValue[0].replace(",", ".")) and comparedData1 >= float(ClassValue[1].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
                     else:
                         df[className] =  [ className if comparedData0 > float(ClassValue[0].replace(",", ".")) and comparedData1 > float(ClassValue[1].replace(",", ".")) else "NOT ("+className+")" for comparedData0, comparedData1 in zip(df[column0], df[column1])]
@@ -377,9 +386,9 @@ def generatePatternPage(pattern, patternSize, df, targetAttributeArray, wholePat
 
     title = ""
     if len(targetAttributeArray) == 1:
-        title = "IF ("+wholePattern+") THEN ("+targetAttributeArray[0]+")"
+        title = "IF {"+wholePatternWithParenthesis+"} THEN {("+targetAttributeArray[0]+")}"
     else:
-        title = "IF ("+wholePattern+") THEN ("+targetAttributeArray[0]+" AND "+targetAttributeArray[1]+")"
+        title = "IF {"+wholePatternWithParenthesis+"} THEN {("+targetAttributeArray[0]+") AND ("+targetAttributeArray[1]+")}"
     size = 1638//len(title)
 
     fig = None
@@ -418,7 +427,7 @@ def generatePatternPage(pattern, patternSize, df, targetAttributeArray, wholePat
                 title=attr[0], orientation="v", y=0.5, yanchor="top"
             ))
 
-        fig.write_html('graph.html', default_width='100%', default_height='100%')
+        fig.write_html('index.html', auto_open=True)
     else:
         if patternSize > 2:
             fig = px.bar(dfpattern, x=className, y="count", color=attr[1]+str(1), barmode="group",
@@ -453,57 +462,7 @@ def generatePatternPage(pattern, patternSize, df, targetAttributeArray, wholePat
                 title=attr[0], orientation="v", y=0.5, yanchor="top"
             ))
 
-        fig.write_html('graph.html', default_width='100%', default_height='100%')
+        fig.write_html('index.html', auto_open=True)
 
 
-#        if separador == "<=":
-#            dfpattern[" "] =  dfpattern[field].map(lambda x : 'Item compliant' if x <= float(value.replace(",",".")) else 'Not Item compliant')
-#            dfpattern[field] =  dfpattern[field].map(lambda x : pattern if x <= float(value.replace(",",".")) else opposite(pattern) )
-#            dfpattern = dfpattern.groupby([" " , field, targetAttribute]).size().reset_index().rename(columns={0:'count'})
-#        elif separador == "<":
-#            dfpattern[" "] =  dfpattern[field].map(lambda x : 'Item compliant' if x < float(value.replace(",",".")) else 'Not Item compliant' )
-#            dfpattern[field] =  dfpattern[field].map(lambda x : pattern if x < float(value.replace(",",".")) else opposite(pattern) )
-#            dfpattern = dfpattern.groupby([" " , field, targetAttribute]).size().reset_index().rename(columns={0:'count'})
-#        elif separador == ">=":
-#            dfpattern[" "] =  dfpattern[field].map(lambda x : 'Item compliant' if x >= float(value.replace(",",".")) else 'Not Item compliant' )
-#            dfpattern[field] =  dfpattern[field].map(lambda x : pattern if x >= float(value.replace(",",".")) else opposite(pattern) )
-#            dfpattern = dfpattern.groupby([" " , field, targetAttribute]).size().reset_index().rename(columns={0:'count'})
-#        else:
-#            dfpattern[" "] =  dfpattern[field].map(lambda x : 'Item compliant' if x > float(value.replace(",",".")) else 'Not Item compliant')
-#            dfpattern[field] =  dfpattern[field].map(lambda x : pattern if x > float(value.replace(",",".")) else opposite(pattern))
-#            dfpattern = dfpattern.groupby([" " , field, targetAttribute]).size().reset_index().rename(columns={0:'count'})
-    
-#        dfpattern[targetAttribute] = ["|"+str(val)+"|" for val in dfpattern[targetAttribute]]
-
-#        fig = px.bar(dfpattern, x=targetAttribute, y="count", color=field, facet_col=" ")
-#        fig.update_layout(title={
-#            'text': field,
-#            'y':1.0,
-#            'x':0.5,
-#            'xanchor': 'center',
-#            'yanchor': 'top'}, legend=dict(
-#            title=None, orientation="h", y=1.1, yanchor="bottom", x=0.5, xanchor="center"
-#        ))
-#        fig.write_html(str(pageNumber)+'.html', default_width='100%', default_height='100%')
-
-
-doc = dominate.document(title='Pattern Visualization')
-
-with doc.head:
-    link(rel='stylesheet', href='style.css', type='text/css')
-    script(src='https://code.jquery.com/jquery-3.5.1.js', integrity='sha256-QWo7LDvxbWT2tbbQ97B53yJnYU3WhH/C8ycbRAkjPDc=', crossorigin='anonymous')
-
-with doc:
-    h1('Pattern Visualization')
-    with div():
-        hr()
-        generatePatternPage(patternName, patternSize, df, targetAttributeArray, originalPattern)
-        iframe(src="graph.html", onload="javascript:(function(o){o.style.height=o.contentWindow.document.body.scrollHeight+'px';}(this));", style="height:100%;width:70%;border:none;overflow:hidden;")
-
-with open("index.html", "w", encoding='UTF-8') as document:
-    document.write(str(doc).replace("<!DOCTYPE html>", ""))
-
-with open("style.css", "w", encoding='UTF-8') as cssstyle:
-    cssstyle.write("h1, h2, div { text-align: center; justify-content: center;} code { background: hsl(220, 80%, 90%); } pre { text-align: center; white-space: pre-wrap; background: hsl(30,80%,90%);} pre.item{width: 80%; margin-left: 10%; margin-right: 10%;}")
-
-webbrowser.open_new_tab('index.html')
+generatePatternPage(patternName, patternSize, df, targetAttributeArray, originalPattern, originalPatternWithoutParenthesis)
